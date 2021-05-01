@@ -52,5 +52,11 @@ func foo(w http.ResponseWriter, r *http.Request) {
 }
 
 func bar(w http.ResponseWriter, r *http.Request) {
+	var p1 Person
+	if err := json.NewDecoder(r.Body).Decode(&p1); err != nil {
+		log.Println("Decoded bad data", err)
+		return
+	}
 
+	log.Println("person:", p1)
 }
