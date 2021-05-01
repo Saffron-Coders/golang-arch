@@ -7,7 +7,7 @@ import (
 )
 
 type Person struct {
-	First string
+	First string `json:"firstname"`
 }
 
 func main() {
@@ -27,4 +27,11 @@ func main() {
 	}
 
 	fmt.Println(string(bs))
+
+	xp2 := []Person{}
+	if err := json.Unmarshal(bs, &xp2); err != nil {
+		panic(err)
+	}
+
+	fmt.Println(xp2)
 }
