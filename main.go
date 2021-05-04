@@ -2,12 +2,15 @@ package main
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha512"
 	"fmt"
+	"io"
 	"log"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/gofrs/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -28,12 +31,7 @@ func (u *UserClaims) Valid() error {
 	return nil
 }
 
-var key []byte
-
 func main() {
-	for i := 1; i <= 64; i++ {
-		key = append(key, byte(i))
-	}
 	pass := "123456789"
 
 	hashedPass, err := hashPassword(pass)
@@ -73,7 +71,7 @@ func comparePassword(password string, hashedPass []byte) error {
 }
 
 func signMessage(msg []byte) ([]byte, error) {
-	hash := hmac.New(sha512.New, key)
+	hash := hmac.New(sha512.New, keys[currentKid].key)
 	_, err := hash.Write(msg)
 	if err != nil {
 		return nil, fmt.Errorf("error in signMessage while hashing message: %w", err)
@@ -93,12 +91,39 @@ func checkSig(msg, sig []byte) (bool, error) {
 
 func createToken(c *UserClaims) (string, error) {
 	t := jwt.NewWithClaims(jwt.SigningMethodES512, c)
-	signedToken, err := t.SignedString(key)
+	signedToken, err := t.SignedString(keys[currentKid])
 	if err != nil {
 		return "", fmt.Errorf("error in createToken while signing token: %w", err)
 	}
 	return signedToken, nil
 }
+
+func generateNewKey() error {
+	newKey := make([]byte, 64)
+	_, err := io.ReadFull(rand.Reader, newKey)
+	if err != nil {
+		return fmt.Errorf("error in generateNewKey while generating key: %w", err)
+	}
+
+	uid, err := uuid.NewV4()
+	if err != nil {
+		return fmt.Errorf("error in generateNewKey while generating key: %w", err)
+	}
+	keys[uid.String()] = key{
+		key:     newKey,
+		created: time.Now(),
+	}
+	currentKid = uid.String()
+	return nil
+}
+
+type key struct {
+	key     []byte
+	created time.Time
+}
+
+var currentKid = ""
+var keys = map[string]key{}
 
 func parseToken(signedToken string) (*UserClaims, error) {
 	t, err := jwt.ParseWithClaims(signedToken, &UserClaims{}, func(t *jwt.Token) (interface{}, error) {
@@ -106,7 +131,16 @@ func parseToken(signedToken string) (*UserClaims, error) {
 			return nil, fmt.Errorf("invalid signing algorithm")
 		}
 
-		return key, nil
+		kid, ok := t.Header["kid"].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid key ID")
+		}
+
+		k, ok := keys[kid]
+		if !ok {
+			return nil, fmt.Errorf("invalid key ID")
+		}
+		return k.key, nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error in parseToken while verifying parsing token")
