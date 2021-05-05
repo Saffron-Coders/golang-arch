@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 func getCode(msg string) string {
@@ -49,6 +50,22 @@ func foo(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		c = &http.Cookie{}
 	}
+
+	isEqual := true
+	xs := strings.SplitN(c.Value, "|", 2)
+	if len(xs) == 2 {
+		cCode := xs[0]
+		cEmail := xs[1]
+
+		code := getCode(cEmail)
+		isEqual = hmac.Equal([]byte(cCode), []byte(code))
+	}
+
+	message := "Not logged in"
+	if isEqual {
+		message = "Logged in"
+	}
+
 	html := `<!DOCTYPE html>
 	<html lang="en">
 	<head>
@@ -59,6 +76,7 @@ func foo(w http.ResponseWriter, r *http.Request) {
 	</head>
 	<body>
 	<p>Cookie Value: ` + c.Value + `</p>
+	<p>Cookie Value: ` + message + `</p>
 		<form action="/submit" method="POST">
 			<input type="text" name="email"/>
 			<input type="submit" />
