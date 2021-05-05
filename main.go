@@ -3,12 +3,15 @@ package main
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"fmt"
 	"io"
 	"net/http"
 )
 
 func getCode(msg string) string {
-	hmac.New(sha256.New, []byte(""))
+	h := hmac.New(sha256.New, []byte("i love thursday when it rains 8723 inches"))
+	h.Write([]byte(msg))
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 func main() {
@@ -30,13 +33,22 @@ func bar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	code := getCode(email)
+
 	c := http.Cookie{
 		Name:  "session",
-		Value: "",
+		Value: code + "|" + email,
 	}
+
+	http.SetCookie(w, &c)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func foo(w http.ResponseWriter, r *http.Request) {
+	c, err := r.Cookie("session")
+	if err != nil {
+		c = &http.Cookie{}
+	}
 	html := `<!DOCTYPE html>
 	<html lang="en">
 	<head>
@@ -46,6 +58,7 @@ func foo(w http.ResponseWriter, r *http.Request) {
 		<title>HMAC Example</title>
 	</head>
 	<body>
+	<p>Cookie Value: ` + c.Value + `</p>
 		<form action="/submit" method="POST">
 			<input type="text" name="email"/>
 			<input type="submit" />
