@@ -9,37 +9,33 @@ import (
 	"github.com/dgrijalva/jwt-go"
 )
 
-type myClaims struct {
-	jwt.StandardClaims
-	email string
+func main() {
+	http.HandleFunc("/", foo)
+	http.HandleFunc("/submit", bar)
+	http.ListenAndServe(":8080", nil)
 }
 
-const myKey = "i love thursday when it rains 8723 inches"
+type myClaims struct {
+	jwt.StandardClaims
+	Email string
+}
+
+const myKey = "i love thursdays when it rains 8723 inches"
 
 func getJWT(msg string) (string, error) {
-
 	claims := myClaims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
 		},
-		email: msg,
+		Email: msg,
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
-
-	ss, err := token.SignedString(myKey)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &claims)
+	ss, err := token.SignedString([]byte(myKey))
 	if err != nil {
-		return "", fmt.Errorf("couldn't signString: %w", err)
+		return "", fmt.Errorf("couldn't SignedString %w", err)
 	}
-
 	return ss, nil
-}
-
-func main() {
-	http.HandleFunc("/", foo)
-	http.HandleFunc("/submit", bar)
-
-	http.ListenAndServe(":8080", nil)
 }
 
 func bar(w http.ResponseWriter, r *http.Request) {
@@ -56,9 +52,11 @@ func bar(w http.ResponseWriter, r *http.Request) {
 
 	ss, err := getJWT(email)
 	if err != nil {
-		http.Error(w, "couldn't get jwt", http.StatusInternalServerError)
+		http.Error(w, "couldn't getJWT", http.StatusInternalServerError)
+		return
 	}
 
+	// "hash / message digest / digest / hash value" | "what we stored"
 	c := http.Cookie{
 		Name:  "session",
 		Value: ss,
@@ -75,48 +73,53 @@ func foo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ss := c.Value
-	afterVerificationToken, err := jwt.ParseWithClaims(ss, &myClaims{}, func(beforeVerificationToken *jwt.Token) (interface{}, error) {
-		return []byte(myKey), err
-		// return myKey, err
+	afterVerificationToken, err := jwt.ParseWithClaims(ss, &myClaims{}, func(beforeVeritificationToken *jwt.Token) (interface{}, error) {
+		if beforeVeritificationToken.Method.Alg() != jwt.SigningMethodES256.Alg() {
+			return nil, fmt.Errorf("someone tried to changed signing method: %w", err)
+		}
+
+		return []byte(myKey), nil
 	})
-	// if err != nil {
-	// 	http.Error(w, "You aren't logged in", http.StatusUnauthorized)
-	// }
 
-	// StandardClaims has the
-	// valid() error
-	// method which implements Claims interface....
+	// StandardClaims has the ...
+	// Valid() error
+	// ... method which means it implements the Claims interface ...
+	/*
+			type Claims interface {
+		    	Valid() error
+			}
+	*/
+	// ... when you ParseWithClaims ...
+	// the Valid() method gets run
+	// ... and if all is well, then returns no "error" and
+	// type TOKEN which has a field VALID will be true
 
-	// When you ParseClaims as with ParseWithClaims the valid() method runs
-	// and if all goes well , then return no error and type token which has the field valid will be true
-	isEqual := afterVerificationToken.Valid && err == nil
+	isEqual := err == nil && afterVerificationToken.Valid
 
 	message := "Not logged in"
 	if isEqual {
 		message = "Logged in"
 		claims := afterVerificationToken.Claims.(*myClaims)
-		fmt.Println(claims.email)
-		fmt.Println(claims.StandardClaims.ExpiresAt)
-
+		fmt.Println(claims.Email)
+		fmt.Println(claims.ExpiresAt)
 	}
 
 	html := `<!DOCTYPE html>
 	<html lang="en">
 	<head>
 		<meta charset="UTF-8">
-		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<meta http-equiv="X-UA-Compatible" content="ie=edge">
 		<title>HMAC Example</title>
 	</head>
 	<body>
-	<p>Cookie Value: ` + c.Value + `</p>
-	<p>Cookie Value: ` + message + `</p>
-		<form action="/submit" method="POST">
-			<input type="text" name="emailThing"/>
+		<p>Cookie value: ` + c.Value + `</p>
+		<p>` + message + `</p>
+		<form action="/submit" method="post">
+			<input type="email" name="emailThing" />
 			<input type="submit" />
 		</form>
 	</body>
 	</html>`
-
 	io.WriteString(w, html)
 }
