@@ -9,13 +9,14 @@ import (
 	"github.com/dgrijalva/jwt-go"
 )
 
-func getJWT(msg string) (string, error) {
-	myKey := "i love thursday when it rains 8723 inches"
+type myClaims struct {
+	jwt.StandardClaims
+	email string
+}
 
-	type myClaims struct {
-		jwt.StandardClaims
-		email string
-	}
+const myKey = "i love thursday when it rains 8723 inches"
+
+func getJWT(msg string) (string, error) {
 
 	claims := myClaims{
 		StandardClaims: jwt.StandardClaims{
@@ -73,11 +74,30 @@ func foo(w http.ResponseWriter, r *http.Request) {
 		c = &http.Cookie{}
 	}
 
-	// isEqual := true
+	ss := c.Value
+	afterVerificationToken, err := jwt.ParseWithClaims(ss, &myClaims{}, func(beforeVerificationToken *jwt.Token) (interface{}, error) {
+		return []byte(myKey), err
+		// return myKey, err
+	})
+	// if err != nil {
+	// 	http.Error(w, "You aren't logged in", http.StatusUnauthorized)
+	// }
+
+	// StandardClaims has the
+	// valid() error
+	// method which implements Claims interface....
+
+	// When you ParseClaims as with ParseWithClaims the valid() method runs
+	// and if all goes well , then return no error and type token which has the field valid will be true
+	isEqual := afterVerificationToken.Valid && err == nil
 
 	message := "Not logged in"
 	if isEqual {
 		message = "Logged in"
+		claims := afterVerificationToken.Claims.(*myClaims)
+		fmt.Println(claims.email)
+		fmt.Println(claims.StandardClaims.ExpiresAt)
+
 	}
 
 	html := `<!DOCTYPE html>
