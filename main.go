@@ -16,7 +16,7 @@ func main() {
 	http.ListenAndServe(":8080", nil)
 }
 
-var db map[string][]byte
+var db = map[string][]byte{}
 
 func index(w http.ResponseWriter, r *http.Request) {
 	errMsg := r.FormValue("errormsg")
@@ -72,5 +72,6 @@ func register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	db[username] = hash
+	fmt.Println(db)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
