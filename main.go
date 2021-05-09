@@ -51,10 +51,10 @@ func index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var e string
-
 	if sID != "" {
 		e = sessions[sID]
 	}
+
 	var f string
 	if user, ok := db[e]; ok {
 		f = user.First
@@ -71,15 +71,15 @@ func index(w http.ResponseWriter, r *http.Request) {
 		<title>Document</title>
 	</head>
 	<body>
-	<h1>IF YOU HAVE A SESSION, HERE IS YOUR Name: %s</h1>
+	<h1>IF YOU HAVE A SESSION, HERE IS YOUR NAME: %s</h1>
 	<h1>IF YOU HAVE A SESSION, HERE IS YOUR EMAIL: %s</h1>
 	<h1>IF THERE IS ANY MESSAGE FOR YOU, HERE IT IS: %s</h1>
         <h1>REGISTER</h1>
 		<form action="/register" method="POST">
-			<label for="first"> First </label>
-			<input type="text" name="first" placeholder="firstname">
-			<input type="email" name="e" placeholder="email">
-			<input type="password" name="p" placeholder=password>
+		<label for="first">First</label>
+		<input type="text" name="first" placeholder="First" id="first">
+		<input type="email" name="e">
+			<input type="password" name="p">
 			<input type="submit">
         </form>
         <h1>LOG IN</h1>
@@ -115,7 +115,7 @@ func register(w http.ResponseWriter, r *http.Request) {
 
 	f := r.FormValue("first")
 	if f == "" {
-		msg := url.QueryEscape("your First name needs to not be empty")
+		msg := url.QueryEscape("your first name needs to not be empty")
 		http.Redirect(w, r, "/?msg="+msg, http.StatusSeeOther)
 		return
 	}
@@ -174,8 +174,8 @@ func login(w http.ResponseWriter, r *http.Request) {
 	sessions[sUUID] = e
 	token, err := createToken(sUUID)
 	if err != nil {
-		log.Println("Couldn't create token in login", err)
-		msg := url.QueryEscape("our server didn't get enough lunch and it is not working 200% right now. Try back later")
+		log.Println("couldn't createToken in login", err)
+		msg := url.QueryEscape("our server didn't get enough lunch and is not working 200% right now. Try bak later")
 		http.Redirect(w, r, "/?msg="+msg, http.StatusSeeOther)
 		return
 	}
@@ -192,6 +192,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 }
 
 func createToken(sid string) (string, error) {
+
 	cc := customClaims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
@@ -199,29 +200,28 @@ func createToken(sid string) (string, error) {
 		SID: sid,
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodES256, cc)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, cc)
 	st, err := token.SignedString(key)
 	if err != nil {
-		return "", fmt.Errorf("couldn't sign token in createToke: %w", err)
+		return "", fmt.Errorf("couldn't sign token in createToken %w", err)
 	}
-
 	return st, nil
-
 }
 
 func parseToken(st string) (string, error) {
 	token, err := jwt.ParseWithClaims(st, &customClaims{}, func(t *jwt.Token) (interface{}, error) {
-		if t.Method.Alg() != jwt.SigningMethodES256.Alg() {
-			return "", errors.New("parseWithClaims different algorithm used!")
+		if t.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+			return nil, errors.New("parseWithClaims different algorithms used")
 		}
 		return key, nil
 	})
+
 	if err != nil {
 		return "", fmt.Errorf("couldn't ParseWithClaims in parseToken %w", err)
 	}
 
 	if !token.Valid {
-		return "", fmt.Errorf("Token is not valid in parseToken")
+		return "", fmt.Errorf("token not valid in parseToken")
 	}
 
 	return token.Claims.(*customClaims).SID, nil
