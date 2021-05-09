@@ -1,14 +1,11 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
-	"time"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -18,13 +15,10 @@ type user struct {
 	First    string
 }
 
-type customClaims struct {
-	jwt.StandardClaims
-	SID string
-}
-
 // key is email, value is user
 var db = map[string]user{}
+
+// key is sessionId and value is email
 var sessions = map[string]string{}
 
 var key = []byte("my secret key 007 james bond rule the world from my mom's basement")
@@ -33,6 +27,7 @@ func main() {
 	http.HandleFunc("/", index)
 	http.HandleFunc("/register", register)
 	http.HandleFunc("/login", login)
+	http.HandleFunc("/logout", loout)
 	http.ListenAndServe(":8080", nil)
 }
 
@@ -88,6 +83,11 @@ func index(w http.ResponseWriter, r *http.Request) {
 			<input type="password" name="p">
 			<input type="submit">
         </form>
+
+
+		<form action="/logout" method="POST">
+			<input type="submit" value="Logout">
+		</form>
 	</body>
 	</html>`, f, e, errMsg)
 }
@@ -191,38 +191,29 @@ func login(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/?msg="+msg, http.StatusSeeOther)
 }
 
-func createToken(sid string) (string, error) {
-
-	cc := customClaims{
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
-		},
-		SID: sid,
+func loout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
 	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, cc)
-	st, err := token.SignedString(key)
+	c, err := r.Cookie("sessionID")
 	if err != nil {
-		return "", fmt.Errorf("couldn't sign token in createToken %w", err)
-	}
-	return st, nil
-}
-
-func parseToken(st string) (string, error) {
-	token, err := jwt.ParseWithClaims(st, &customClaims{}, func(t *jwt.Token) (interface{}, error) {
-		if t.Method.Alg() != jwt.SigningMethodHS256.Alg() {
-			return nil, errors.New("parseWithClaims different algorithms used")
+		c = &http.Cookie{
+			Name:  "sessionID",
+			Value: "",
 		}
-		return key, nil
-	})
+	}
 
+	sID, err := parseToken(c.Value)
 	if err != nil {
-		return "", fmt.Errorf("couldn't ParseWithClaims in parseToken %w", err)
+		log.Println("index parseToken", err)
 	}
 
-	if !token.Valid {
-		return "", fmt.Errorf("token not valid in parseToken")
-	}
+	delete(sessions, sID)
 
-	return token.Claims.(*customClaims).SID, nil
+	c.MaxAge = -1
+	http.SetCookie(w, c)
+
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+
 }
